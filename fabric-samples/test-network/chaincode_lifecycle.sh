@@ -12,9 +12,10 @@ set -o pipefail
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 
 export PATH=${PWD}/../bin:${PWD}:$PATH 
-export FABRIC_CFG_PATH=${PWD}/../config/
+export FABRIC_CFG_PATH=${PWD}/../config
 
-ORDERER_CA=${DIR}/test-network/organizations/ordererOrganizations/example.com/tlsca/tlsca.example.com-cert.pem
+ORDERER_CERT=${PWD}/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/tls/ca.crt # path to orderer TLS certification file
+ORDERER_CA=${PWD}/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem
 PEER0_ORG1_CA=${DIR}/test-network/organizations/peerOrganizations/org1.example.com/tlsca/tlsca.org1.example.com-cert.pem
 PEER0_ORG2_CA=${DIR}/test-network/organizations/peerOrganizations/org2.example.com/tlsca/tlsca.org2.example.com-cert.pem
 PEER0_ORG3_CA=${DIR}/test-network/organizations/peerOrganizations/org3.example.com/tlsca/tlsca.org3.example.com-cert.pem
@@ -33,11 +34,12 @@ export "CORE_PEER_ADDRESS=${CORE_PEER_ADDRESS}"
 
 CHANNEL_NAME="testchannel"
 CHAINCODE_NAME="OssV1"
+TARFILE_NAME="OssV1_1"
 CHAINCODE_VERSION="1"
-# CHAINCODE_PATH="../chaincode/property-app/go/"
+CHAINCODE_PATH="../chaincode/oss-app/go/"
 CHAINCODE_LANG="golang"
-# should have been changed, but wtv
-CHAINCODE_LABEL="property_1" 
+CHAINCODE_LABEL="OssV1_1"
+# CHAINCODE_LABEL="property_1" 
 
 # environment variables for ORG1
 setEnvVarsForPeer0Org1() {
@@ -46,6 +48,7 @@ setEnvVarsForPeer0Org1() {
    CORE_PEER_ADDRESS=localhost:7051
    CORE_PEER_TLS_ROOTCERT_FILE=${CORE_PEER_TLS_ROOTCERT_FILE_ORG1}
 
+   export "CORE_PEER_TLS_ROOTCERT_FILE=${CORE_PEER_TLS_ROOTCERT_FILE_ORG1}" # exported
    export "CORE_PEER_MSPCONFIGPATH=${CORE_PEER_MSPCONFIGPATH}"
    export "CORE_PEER_LOCALMSPID=${CORE_PEER_LOCALMSPID}"
 }
@@ -57,6 +60,7 @@ setEnvVarsForPeer0Org2() {
    CORE_PEER_ADDRESS=localhost:9051
    CORE_PEER_TLS_ROOTCERT_FILE=${CORE_PEER_TLS_ROOTCERT_FILE_ORG2}
 
+   export "CORE_PEER_TLS_ROOTCERT_FILE=${CORE_PEER_TLS_ROOTCERT_FILE_ORG2}" # exported
    export "CORE_PEER_MSPCONFIGPATH=${CORE_PEER_MSPCONFIGPATH}"
    export "CORE_PEER_LOCALMSPID=${CORE_PEER_LOCALMSPID}"
 }
@@ -91,13 +95,18 @@ queryInstalled() {
 approveForMyOrg1() {
     echo "===================== Approving chaincode definition from org 1 ===================== "
     setEnvVarsForPeer0Org1
+
+    # added --certfile flag so that the command will point to the correct certfile directory
+    # peer lifecycle chaincode approveformyorg -o $ORDERER_ADDRESS\
+    # --ordererTLSHostnameOverride orderer.example.com --tls --certfile $ORDERER_CERT --cafile $ORDERER_CA\ 
+    # --channelID ${CHANNEL_NAME} --name ${CHAINCODE_NAME} --version ${CHAINCODE_VERSION}\
+    # --init-required --package-id ${PACKAGE_ID} --sequence 1
+    
     peer lifecycle chaincode approveformyorg -o $ORDERER_ADDRESS\
     --ordererTLSHostnameOverride orderer.example.com --tls --cafile $ORDERER_CA\
     --channelID ${CHANNEL_NAME} --name ${CHAINCODE_NAME} --version ${CHAINCODE_VERSION}\
     --init-required --package-id ${PACKAGE_ID} --sequence 1
-
     echo "===================== Chaincode approved from org 1 ===================== "
-
 }
 
 checkCommitReadinessForOrg1() {
@@ -111,6 +120,13 @@ checkCommitReadinessForOrg1() {
 approveForMyOrg2() {
     echo "===================== Approving chaincode definition from org 2 ===================== "
     setEnvVarsForPeer0Org2
+
+    # i added --certfile flag so that the command will point to the correct certfile directory
+    # peer lifecycle chaincode approveformyorg -o $ORDERER_ADDRESS\
+    # --ordererTLSHostnameOverride orderer.example.com --tls --certfile $ORDERER_CERT --cafile $ORDERER_CA\
+    # --channelID ${CHANNEL_NAME} --name ${CHAINCODE_NAME} --version ${CHAINCODE_VERSION}\
+    # --init-required --package-id ${PACKAGE_ID} --sequence 1
+
     peer lifecycle chaincode approveformyorg -o $ORDERER_ADDRESS\
     --ordererTLSHostnameOverride orderer.example.com --tls --cafile $ORDERER_CA\
     --channelID ${CHANNEL_NAME} --name ${CHAINCODE_NAME} --version ${CHAINCODE_VERSION}\
@@ -157,6 +173,7 @@ chaincodeInvokeInit() {
     --peerAddresses localhost:9051 --tlsRootCertFiles $CORE_PEER_TLS_ROOTCERT_FILE_ORG2\
     --isInit -c '{"Args":[]}'
     echo "===================== Succesfully initialized the chaincode===================== "
+    echo 
 }
 
 # Un-comment if need to run dynamically [run the arguments via cmd]
@@ -203,12 +220,6 @@ chaincodeFunction() {
     # echo "===================== Successfully added new document ===================== "
 }
 
-# Predefined chaincode arguments; if run statically 
-ARGS1='{"Args":["CreateDoc", "user123", "doc456","Example Document","pdf","2023-07-06T12:34:56Z", "QmTzQ1N4aVx7Mh3Uq7P8L2V9Rz1Q4uQ8Wz1F1R2P3S4T5"]}'
-ARGS2='{"Args":["CreateDoc", "user124", "doc467","Example Document 2","pdf","2023-07-06T14:34:56Z", "QmTzQ1N4aVx7Mh3Uq7P8L2V9Rz1Q4uQ8Wz1F1R2P3G4F5"]}'
-ARGS3='{"Args":["QueryDocByUserId", "user124"]}'
-ARGS4='{"Args":["QueryAllDocs"]}'
-
 # Install and approve chaincode
 installChaincode
 queryInstalled
@@ -221,36 +232,88 @@ queryCommitted
 
 # Initialize the chaincode
 chaincodeInvokeInit 
-echo "===================== Starting chaincode function ===================== "
+echo "===================== Chaincode Initialization Complete ===================== "
+echo
 # Run the chaincode function
 # chaincodeFunction "$ARGS"
 sleep 5
 
-# Chaincode function with argument
-echo "===================== Adding a new document ===================== "
-chaincodeFunction "" "$ARGS1"
-echo "===================== Successfully added a new document ===================== "
-echo
-sleep 5
+# Array of arguments to create a new doc
+declare -a ARGS_ARRAY_CREATE_DOC=(
+    '{"Args":["CreateDoc", "user123", "doc456","Example Document 1","pdf","2023-07-06T12:34:56Z", "QmTzQ1N4aVx7Mh3Uq7P8L2V9Rz1Q4uQ8Wz1F1R2P3S4T5"]}'
+    '{"Args":["CreateDoc", "user123", "doc891","Example Document 4","pdf","2023-07-06T14:34:56Z", "QmTzQ1N4aVx7Mh3Uq7P8L2W9Rz1Q4uQ8Wz1F1R2P3S4T5"]}'
+    '{"Args":["CreateDoc", "user124", "doc467","Example Document 2","pdf","2023-07-06T14:34:56Z", "QmTzQ1N4aVx7Mh3Uq7P8L2V9Rz1Q4uQ8Wz1F1R2P3G4F5"]}'
+    '{"Args":["CreateDoc", "user124", "doc764","Example Document 3","pdf","2023-07-06T14:35:56Z", "QmTzQ1N4aVx7Mh3Wq7P8L2V9Rz1Q4uQ8Wz1F1R2P3G4F5"]}'
+)
 
-echo "===================== Adding another new document ===================== "
-chaincodeFunction "" "$ARGS2"
-echo "===================== Successfully added a new document ===================== "
-echo
-sleep 5
+# Loop through the array and invoke the chaincode function
+for ARGS_CREATE_DOC in "${ARGS_ARRAY_CREATE_DOC[@]}"; do
+    echo "===================== Adding a new document ===================== "
+    chaincodeFunction "" "$ARGS_CREATE_DOC"
+    echo "===================== Successfully added a new document ===================== "
+    echo
+    sleep 5
+done
 
-echo "===================== Querying a specific document ===================== "
-chaincodeFunction "" "$ARGS3"
-echo "===================== Document successfully queried ===================== "
-echo
-sleep 5
+########################################################################
 
-echo "===================== Querying all documents ===================== "
-chaincodeFunction "" "$ARGS4"
-echo "===================== All documents are successfully queried ===================== "
-echo
-sleep 5
+# Array of arguments to query a doc by user id
+declare -a ARGS_ARRAY_QUERY_DOC_BY_USER_ID=(
+    '{"Args":["QueryDocByUserId", "user124"]}'
+    '{"Args":["QueryDocByUserId", "user123"]}'
+    # '{"Args":["QueryDocByUserId", "user122"]}' #should be an error
+)
+
+# Loop through the array and invoke the chaincode function
+for ARGS_USER_ID in "${ARGS_ARRAY_QUERY_DOC_BY_USER_ID[@]}"; do
+    echo "===================== Querying a specific document by user id ===================== "
+    chaincodeFunction "" "$ARGS_USER_ID"
+    echo "===================== Document successfully queried ===================== "
+    echo
+    sleep 5
+done
+
+########################################################################
+
+# Array of arguments to query a doc by name
+declare -a ARGS_ARRAY_QUERY_DOC_BY_NAME=(
+    # '{"Args":["QueryDocByName", "Example Document"]}' #should be an error
+    '{"Args":["QueryDocByName", "Example Document 1"]}'
+    '{"Args":["QueryDocByName", "Example Document 2"]}'
+    '{"Args":["QueryDocByName", "Example Document 3"]}'
+    '{"Args":["QueryDocByName", "Example Document 4"]}'
+)
+
+# Loop through the array and invoke the chaincode function
+for ARGS_DOC_NAME in "${ARGS_ARRAY_QUERY_DOC_BY_NAME[@]}"; do
+    echo "===================== Querying a specific document by document name ===================== "
+    chaincodeFunction "" "$ARGS_DOC_NAME"
+    echo "===================== Document successfully queried ===================== "
+    echo
+    sleep 5
+done
+
+########################################################################
+
+# Array of arguments to create query a doc by name
+declare -a ARGS_ARRAY_QUERY_DOC_BY_DOC_ID=(
+    '{"Args":["QueryDocByDocId", "user123", "doc456"]}'
+    '{"Args":["QueryDocByDocId", "user123", "doc891"]}'
+    '{"Args":["QueryDocByDocId", "user124", "doc467"]}'
+    '{"Args":["QueryDocByDocId", "user124", "doc764"]}'
+    # '{"Args":["QueryDocByDocId", "user125", "doc764"]}' #should be an error 
+)
+
+# Loop through the array and invoke the chaincode function
+for ARGS_DOC_ID in "${ARGS_ARRAY_QUERY_DOC_BY_DOC_ID[@]}"; do
+    echo "===================== Querying a specific document by document id ===================== "
+    chaincodeFunction "" "$ARGS_DOC_ID"
+    echo "===================== Document successfully queried ===================== "
+    echo
+    sleep 5
+done
+
+########################################################################
 
 # invoke chaincode
 # peer chaincode invoke -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com --tls ${CORE_PEER_TLS_ENABLED} --cafile ${ORDERER_CA} --channelID testchannel --name OssV1 --peerAddresses localhost:7051 --tlsRootCertFiles ${CORE_PEER_TLS_ROOTCERT_FILE_ORG1} --peerAddresses localhost:9051 --tlsRootCertFiles ${CORE_PEER_TLS_ROOTCERT_FILE_ORG2} ${IS_INIT} -c "$ARGS"
-#
